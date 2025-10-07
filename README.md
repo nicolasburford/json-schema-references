@@ -8,7 +8,7 @@ Navigate between local JSON Schema `$ref` values with hover previews and go-to-d
 - `F12` / `Cmd+Click` on a `$ref` to jump to the referenced schema location, including nested JSON Pointer targets.
 - Supports relative, absolute, and `file://` paths that resolve to local schema files.
 
-![Product Collection](assets/product-collection.png)
+![Product Collection](https://github.com/nicolasburford/json-schema-references/blob/main/assets/product-collection.png?raw=true)
 
 ## Getting Started
 
