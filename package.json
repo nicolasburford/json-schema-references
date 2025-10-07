@@ -2,7 +2,7 @@
   "name": "json-schema-nav",
   "displayName": "JSON Schema References",
   "description": "Navigate local JSON Schema $ref references with hover previews and go to definition.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "nicolasburford",
   "icon": "assets/icon.png",
   "engines": {
