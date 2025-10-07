@@ -1,11 +1,16 @@
 {
   "name": "json-schema-nav",
-  "displayName": "JSON Schema Navigator",
+  "displayName": "JSON Schema References",
   "description": "Navigate local JSON Schema $ref references with hover previews and go to definition.",
   "version": "0.0.1",
   "publisher": "nicolasburford",
+  "icon": "assets/icon.png",
   "engines": {
     "vscode": "^1.85.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicolasburford/json-schema-nav.git"
   },
   "categories": [
     "Other"

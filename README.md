@@ -1,4 +1,4 @@
-# JSON Schema Navigator
+# JSON Schema References
 
 Navigate between local JSON Schema `$ref` values with hover previews and go-to-definition support.
 
@@ -7,6 +7,8 @@ Navigate between local JSON Schema `$ref` values with hover previews and go-to-d
 - Hover a `$ref` string in JSON or JSONC files to preview the referenced schema snippet.
 - `F12` / `Cmd+Click` on a `$ref` to jump to the referenced schema location, including nested JSON Pointer targets.
 - Supports relative, absolute, and `file://` paths that resolve to local schema files.
+
+![Product Collection](assets/product-collection.png)
 
 ## Getting Started
 
