@@ -1,0 +1,31 @@
+{
+  "name": "json-schema-nav",
+  "displayName": "JSON Schema Navigator",
+  "description": "Navigate local JSON Schema $ref references with hover previews and go to definition.",
+  "version": "0.0.1",
+  "publisher": "nicolasburford",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:json",
+    "onLanguage:jsonc"
+  ],
+  "main": "./out/extension.js",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.2.0"
+  }
+}
