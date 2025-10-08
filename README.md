@@ -7,6 +7,10 @@ Navigate between local JSON Schema `$ref` values with hover previews and go-to-d
 - Hover a `$ref` string in JSON or JSONC files to preview the referenced schema snippet.
 - `F12` / `Cmd+Click` on a `$ref` to jump to the referenced schema location, including nested JSON Pointer targets.
 - Supports relative, absolute, and `file://` paths that resolve to local schema files.
+- **Broken reference detection**: Automatically validates all `$ref` references and displays errors for:
+  - Missing or non-existent files
+  - Invalid JSON pointers that don't resolve to a valid location in the target schema
+  - Files with broken references will show errors inline, making them easy to identify and fix
 
 ![Product Collection](https://github.com/nicolasburford/json-schema-references/blob/main/assets/product-collection.png?raw=true)
 
@@ -24,3 +28,4 @@ Navigate between local JSON Schema `$ref` values with hover previews and go-to-d
 - Only local file references are resolved. Remote URIs (e.g. `http://`) are ignored.
 - Pointer resolution follows the JSON Pointer specification, including `~0`/`~1` escape handling.
 - Hover previews truncate after a few hundred characters to keep tooltips compact.
+- Broken reference diagnostics are updated in real-time as you edit your JSON files.
