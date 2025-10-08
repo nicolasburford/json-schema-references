@@ -25,17 +25,231 @@ interface SchemaMetadata {
 }
 
 const SUPPORTED_LANGUAGES = ['json', 'jsonc'];
+
 export function activate(context: vscode.ExtensionContext) {
   const provider = new JsonRefNavigationProvider();
+  const diagnosticCollection = vscode.languages.createDiagnosticCollection('json-schema-references');
 
   context.subscriptions.push(
     vscode.languages.registerHoverProvider(SUPPORTED_LANGUAGES, provider),
-    vscode.languages.registerDefinitionProvider(SUPPORTED_LANGUAGES, provider)
+    vscode.languages.registerDefinitionProvider(SUPPORTED_LANGUAGES, provider),
+    diagnosticCollection
+  );
+
+  // Validate all open documents on activation
+  vscode.workspace.textDocuments.forEach((doc) => {
+    if (SUPPORTED_LANGUAGES.includes(doc.languageId)) {
+      validateDocument(doc, diagnosticCollection);
+    }
+  });
+
+  // Validate when a document is opened
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument((doc) => {
+      if (SUPPORTED_LANGUAGES.includes(doc.languageId)) {
+        validateDocument(doc, diagnosticCollection);
+      }
+    })
+  );
+
+  // Validate when a document is changed
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument((event) => {
+      if (SUPPORTED_LANGUAGES.includes(event.document.languageId)) {
+        validateDocument(event.document, diagnosticCollection);
+      }
+    })
+  );
+
+  // Clear diagnostics when a document is closed
+  context.subscriptions.push(
+    vscode.workspace.onDidCloseTextDocument((doc) => {
+      diagnosticCollection.delete(doc.uri);
+    })
   );
 }
 
 export function deactivate() {
   // No-op
+}
+
+async function validateDocument(
+  document: vscode.TextDocument,
+  diagnosticCollection: vscode.DiagnosticCollection
+): Promise<void> {
+  const text = document.getText();
+  const root = parseTree(text);
+  if (!root) {
+    diagnosticCollection.set(document.uri, []);
+    return;
+  }
+
+  const diagnostics: vscode.Diagnostic[] = [];
+  await findAllRefs(document, root, diagnostics);
+  diagnosticCollection.set(document.uri, diagnostics);
+}
+
+async function findAllRefs(
+  document: vscode.TextDocument,
+  node: JsonNode,
+  diagnostics: vscode.Diagnostic[]
+): Promise<void> {
+  if (!node) {
+    return;
+  }
+
+  // Check if this is a $ref property
+  if (node.type === 'property' && node.children?.[0]?.value === '$ref') {
+    const valueNode = node.children[1];
+    if (valueNode && valueNode.type === 'string') {
+      const refValue = String(valueNode.value ?? '');
+      if (refValue.trim()) {
+        await validateReference(document, valueNode, refValue, diagnostics);
+      }
+    }
+  }
+
+  // Recursively check all children
+  if (node.children) {
+    for (const child of node.children) {
+      await findAllRefs(document, child, diagnostics);
+    }
+  }
+}
+
+async function validateReference(
+  document: vscode.TextDocument,
+  node: JsonNode,
+  refValue: string,
+  diagnostics: vscode.Diagnostic[]
+): Promise<void> {
+  const trimmed = refValue.trim();
+  const hashIndex = trimmed.indexOf('#');
+  const filePart = hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed;
+  const pointerPart = hashIndex >= 0 ? trimmed.slice(hashIndex + 1) : '';
+
+  // Resolve the target URI
+  const targetUri = resolveUri(document, filePart);
+  if (!targetUri) {
+    const range = new vscode.Range(
+      document.positionAt(node.offset),
+      document.positionAt(node.offset + node.length)
+    );
+    const diagnostic = new vscode.Diagnostic(
+      range,
+      `Cannot resolve reference: "${refValue}"`,
+      vscode.DiagnosticSeverity.Error
+    );
+    diagnostics.push(diagnostic);
+    return;
+  }
+
+  // Try to open the target document
+  let targetDocument: vscode.TextDocument;
+  try {
+    targetDocument = await vscode.workspace.openTextDocument(targetUri);
+  } catch (error) {
+    const range = new vscode.Range(
+      document.positionAt(node.offset),
+      document.positionAt(node.offset + node.length)
+    );
+    const diagnostic = new vscode.Diagnostic(
+      range,
+      `File not found: "${filePart || 'current file'}"`,
+      vscode.DiagnosticSeverity.Error
+    );
+    diagnostics.push(diagnostic);
+    return;
+  }
+
+  // If there's a JSON pointer, validate it
+  if (pointerPart) {
+    const pointerSegments = parseJsonPointer(pointerPart);
+    const targetNode = findTargetNode(targetDocument, pointerSegments);
+    if (!targetNode) {
+      const range = new vscode.Range(
+        document.positionAt(node.offset),
+        document.positionAt(node.offset + node.length)
+      );
+      const diagnostic = new vscode.Diagnostic(
+        range,
+        `Invalid JSON pointer: "#${pointerPart}"`,
+        vscode.DiagnosticSeverity.Error
+      );
+      diagnostics.push(diagnostic);
+    }
+  }
+}
+
+function resolveUri(
+  document: vscode.TextDocument,
+  filePart: string
+): vscode.Uri | undefined {
+  if (!filePart) {
+    return document.uri;
+  }
+
+  if (/^[a-zA-Z][a-zA-Z+\-.]*:\/\//.test(filePart)) {
+    const parsed = vscode.Uri.parse(filePart);
+    return parsed.scheme === 'file' ? parsed : undefined;
+  }
+
+  if (path.isAbsolute(filePart)) {
+    return vscode.Uri.file(filePart);
+  }
+
+  // Windows absolute paths like C:\foo will not be caught by path.isAbsolute when run on POSIX.
+  if (/^[a-zA-Z]:[\\/]/.test(filePart)) {
+    return vscode.Uri.file(filePart);
+  }
+
+  const baseDir = path.dirname(document.uri.fsPath);
+  return vscode.Uri.file(path.resolve(baseDir, filePart));
+}
+
+function parseJsonPointer(pointer: string): Array<string | number> {
+  if (!pointer) {
+    return [];
+  }
+
+  const normalized = pointer.startsWith('/')
+    ? pointer.slice(1)
+    : pointer;
+
+  if (!normalized) {
+    return [];
+  }
+
+  return normalized.split('/').map((segment) => {
+    const unescaped = segment.replace(/~1/g, '/').replace(/~0/g, '~');
+    return /^\d+$/.test(unescaped) ? Number(unescaped) : unescaped;
+  });
+}
+
+function findTargetNode(
+  document: vscode.TextDocument,
+  pointerSegments: Array<string | number>
+): JsonNode | undefined {
+  const text = document.getText();
+  const root = parseTree(text);
+  if (!root) {
+    return undefined;
+  }
+
+  if (!pointerSegments.length) {
+    return root;
+  }
+
+  const located = findNodeAtLocation(root, pointerSegments);
+  if (!located) {
+    return undefined;
+  }
+
+  if (located.type === 'property' && located.children?.[1]) {
+    return located.children[1];
+  }
+
+  return located;
 }
 
 class JsonRefNavigationProvider
