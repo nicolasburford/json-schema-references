@@ -191,7 +191,6 @@ class JsonRefNavigationProvider
     const hashIndex = trimmed.indexOf('#');
     const filePart = hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed;
     const pointerPart = hashIndex >= 0 ? trimmed.slice(hashIndex + 1) : '';
-    const pointerDisplay = pointerPart ? `#${pointerPart}` : '';
 
     const targetUri = this.resolveUri(document, filePart);
     if (!targetUri) {
@@ -206,7 +205,21 @@ class JsonRefNavigationProvider
     }
 
     const pointerSegments = this.parseJsonPointer(pointerPart);
-    const targetNode = this.findTargetNode(targetDocument, pointerSegments);
+    let targetNode = this.findTargetNode(targetDocument, pointerSegments);
+    let resolvedPointerFragment = pointerPart;
+
+    if (
+      !targetNode &&
+      pointerSegments.length === 1 &&
+      pointerSegments[0] !== '$defs'
+    ) {
+      const defsPath = ['$defs', pointerSegments[0]];
+      targetNode = this.findTargetNode(targetDocument, defsPath);
+      if (targetNode) {
+        resolvedPointerFragment = this.buildPointerFragment(defsPath);
+      }
+    }
+
     if (!targetNode) {
       return undefined;
     }
@@ -216,6 +229,9 @@ class JsonRefNavigationProvider
       targetDocument.positionAt(targetNode.offset + targetNode.length)
     );
     const metadata = this.extractSchemaMetadata(targetNode);
+    const pointerDisplay = resolvedPointerFragment
+      ? `#${resolvedPointerFragment}`
+      : '';
 
     return {
       targetUri,
@@ -223,7 +239,7 @@ class JsonRefNavigationProvider
       targetRange,
       metadata,
       pointerDisplay,
-      pointerFragment: pointerPart || undefined
+      pointerFragment: resolvedPointerFragment || undefined
     };
   }
 
@@ -270,6 +286,22 @@ class JsonRefNavigationProvider
       const unescaped = segment.replace(/~1/g, '/').replace(/~0/g, '~');
       return /^\d+$/.test(unescaped) ? Number(unescaped) : unescaped;
     });
+  }
+
+  private buildPointerFragment(segments: Array<string | number>): string {
+    if (!segments.length) {
+      return '';
+    }
+
+    const encoded = segments
+      .map((segment) =>
+        String(segment)
+          .replace(/~/g, '~0')
+          .replace(/\//g, '~1')
+      )
+      .join('/');
+
+    return `/${encoded}`;
   }
 
   private findTargetNode(

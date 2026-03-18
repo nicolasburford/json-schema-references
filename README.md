@@ -22,5 +22,6 @@ Navigate between local JSON Schema `$ref` values with hover previews and go-to-d
 ## Notes
 
 - Only local file references are resolved. Remote URIs (e.g. `http://`) are ignored.
+- Fragment-only refs without a slash will resolve to `$defs`, e.g. `"#Designable"` targets `"/$defs/Designable"`.
 - Pointer resolution follows the JSON Pointer specification, including `~0`/`~1` escape handling.
 - Hover previews truncate after a few hundred characters to keep tooltips compact.
