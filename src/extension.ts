@@ -1,11 +1,10 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { Node as JsonNode, findNodeAtOffset, parseTree } from 'jsonc-parser';
 import {
-  Node as JsonNode,
-  findNodeAtLocation,
-  findNodeAtOffset,
-  parseTree
-} from 'jsonc-parser';
+  parseReferenceTarget,
+  resolveJsonPointerTarget
+} from './reference-utils';
 
 interface ResolvedReference {
   refValue: string;
@@ -188,14 +187,12 @@ class JsonRefNavigationProvider
     Omit<ResolvedReference, 'refValue' | 'sourceRange'> | undefined
   > {
     const trimmed = refValue.trim();
-    const hashIndex = trimmed.indexOf('#');
-    const filePart = hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed;
-    const pointerPart = hashIndex >= 0 ? trimmed.slice(hashIndex + 1) : '';
-
-    const targetUri = this.resolveUri(document, filePart);
-    if (!targetUri) {
+    const parsedTarget = await this.resolveReferenceTarget(document, trimmed);
+    if (!parsedTarget) {
       return undefined;
     }
+
+    const { targetUri, pointerPart } = parsedTarget;
 
     let targetDocument: vscode.TextDocument;
     try {
@@ -204,34 +201,24 @@ class JsonRefNavigationProvider
       return undefined;
     }
 
-    const pointerSegments = this.parseJsonPointer(pointerPart);
-    let targetNode = this.findTargetNode(targetDocument, pointerSegments);
-    let resolvedPointerFragment = pointerPart;
-
-    if (
-      !targetNode &&
-      pointerSegments.length === 1 &&
-      pointerSegments[0] !== '$defs'
-    ) {
-      const defsPath = ['$defs', pointerSegments[0]];
-      targetNode = this.findTargetNode(targetDocument, defsPath);
-      if (targetNode) {
-        resolvedPointerFragment = this.buildPointerFragment(defsPath);
-      }
-    }
-
-    if (!targetNode) {
+    const root = parseTree(targetDocument.getText());
+    if (!root) {
       return undefined;
     }
+
+    const resolvedTarget = resolveJsonPointerTarget(root, pointerPart);
+    if (!resolvedTarget) {
+      return undefined;
+    }
+
+    const { targetNode, pointerFragment } = resolvedTarget;
 
     const targetRange = new vscode.Range(
       targetDocument.positionAt(targetNode.offset),
       targetDocument.positionAt(targetNode.offset + targetNode.length)
     );
     const metadata = this.extractSchemaMetadata(targetNode);
-    const pointerDisplay = resolvedPointerFragment
-      ? `#${resolvedPointerFragment}`
-      : '';
+    const pointerDisplay = pointerFragment ? `#${pointerFragment}` : '';
 
     return {
       targetUri,
@@ -239,7 +226,38 @@ class JsonRefNavigationProvider
       targetRange,
       metadata,
       pointerDisplay,
-      pointerFragment: resolvedPointerFragment || undefined
+      pointerFragment
+    };
+  }
+
+  private async resolveReferenceTarget(
+    document: vscode.TextDocument,
+    refValue: string
+  ): Promise<
+    | {
+        targetUri: vscode.Uri;
+        pointerPart: string;
+      }
+    | undefined
+  > {
+    const parsedTarget = await parseReferenceTarget(refValue, {
+      isExistingFile: async (candidate) => {
+        const candidateUri = this.resolveUri(document, candidate);
+        return candidateUri ? this.uriIsFile(candidateUri) : false;
+      }
+    });
+    if (!parsedTarget) {
+      return undefined;
+    }
+
+    const targetUri = this.resolveUri(document, parsedTarget.filePart);
+    if (!targetUri) {
+      return undefined;
+    }
+
+    return {
+      targetUri,
+      pointerPart: parsedTarget.pointerPart
     };
   }
 
@@ -269,65 +287,17 @@ class JsonRefNavigationProvider
     return vscode.Uri.file(path.resolve(baseDir, filePart));
   }
 
-  private parseJsonPointer(pointer: string): Array<string | number> {
-    if (!pointer) {
-      return [];
+  private async uriIsFile(uri: vscode.Uri): Promise<boolean> {
+    try {
+      const stat = await vscode.workspace.fs.stat(uri);
+      return (
+        stat.type === vscode.FileType.File ||
+        stat.type === vscode.FileType.SymbolicLink ||
+        stat.type === (vscode.FileType.File | vscode.FileType.SymbolicLink)
+      );
+    } catch {
+      return false;
     }
-
-    const normalized = pointer.startsWith('/')
-      ? pointer.slice(1)
-      : pointer;
-
-    if (!normalized) {
-      return [];
-    }
-
-    return normalized.split('/').map((segment) => {
-      const unescaped = segment.replace(/~1/g, '/').replace(/~0/g, '~');
-      return /^\d+$/.test(unescaped) ? Number(unescaped) : unescaped;
-    });
-  }
-
-  private buildPointerFragment(segments: Array<string | number>): string {
-    if (!segments.length) {
-      return '';
-    }
-
-    const encoded = segments
-      .map((segment) =>
-        String(segment)
-          .replace(/~/g, '~0')
-          .replace(/\//g, '~1')
-      )
-      .join('/');
-
-    return `/${encoded}`;
-  }
-
-  private findTargetNode(
-    document: vscode.TextDocument,
-    pointerSegments: Array<string | number>
-  ): JsonNode | undefined {
-    const text = document.getText();
-    const root = parseTree(text);
-    if (!root) {
-      return undefined;
-    }
-
-    if (!pointerSegments.length) {
-      return root;
-    }
-
-    const located = findNodeAtLocation(root, pointerSegments);
-    if (!located) {
-      return undefined;
-    }
-
-    if (located.type === 'property' && located.children?.[1]) {
-      return located.children[1];
-    }
-
-    return located;
   }
 
   private extractSchemaMetadata(targetNode: JsonNode): SchemaMetadata {
