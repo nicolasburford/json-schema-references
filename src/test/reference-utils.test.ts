@@ -72,6 +72,26 @@ test('resolveJsonPointerTarget resolves bare fragments into $defs', () => {
   assert.equal(resolved.targetNode.type, 'object');
 });
 
+test('resolveJsonPointerTarget resolves bare fragments into legacy definitions', () => {
+  const root = parseTree(
+    JSON.stringify({
+      definitions: {
+        money: {
+          type: 'number'
+        }
+      }
+    })
+  );
+
+  assert.ok(root);
+
+  const resolved = resolveJsonPointerTarget(root, 'money');
+
+  assert.ok(resolved);
+  assert.equal(resolved.pointerFragment, '/definitions/money');
+  assert.equal(resolved.targetNode.type, 'object');
+});
+
 test('resolveJsonPointerTarget prefers direct targets over $defs shorthand', () => {
   const root = parseTree(
     JSON.stringify({
@@ -95,6 +115,31 @@ test('resolveJsonPointerTarget prefers direct targets over $defs shorthand', () 
   assert.equal(resolved.targetNode.type, 'object');
 });
 
+test('resolveJsonPointerTarget prefers $defs over legacy definitions shorthand', () => {
+  const root = parseTree(
+    JSON.stringify({
+      $defs: {
+        Designable: {
+          type: 'string'
+        }
+      },
+      definitions: {
+        Designable: {
+          type: 'object'
+        }
+      }
+    })
+  );
+
+  assert.ok(root);
+
+  const resolved = resolveJsonPointerTarget(root, 'Designable');
+
+  assert.ok(resolved);
+  assert.equal(resolved.pointerFragment, '/$defs/Designable');
+  assert.equal(resolved.targetNode.type, 'object');
+});
+
 test('resolveJsonPointerTarget still resolves explicit $defs pointers', () => {
   const root = parseTree(
     JSON.stringify({
@@ -112,5 +157,25 @@ test('resolveJsonPointerTarget still resolves explicit $defs pointers', () => {
 
   assert.ok(resolved);
   assert.equal(resolved.pointerFragment, '/$defs/Designable');
+  assert.equal(resolved.targetNode.type, 'object');
+});
+
+test('resolveJsonPointerTarget still resolves explicit definitions pointers', () => {
+  const root = parseTree(
+    JSON.stringify({
+      definitions: {
+        Designable: {
+          type: 'object'
+        }
+      }
+    })
+  );
+
+  assert.ok(root);
+
+  const resolved = resolveJsonPointerTarget(root, '/definitions/Designable');
+
+  assert.ok(resolved);
+  assert.equal(resolved.pointerFragment, '/definitions/Designable');
   assert.equal(resolved.targetNode.type, 'object');
 });

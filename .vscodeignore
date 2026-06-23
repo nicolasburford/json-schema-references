@@ -1,6 +1,9 @@
 .vscode/**
+.github/**
 .gitignore
-tsconfig.json
-src/**
-**/*.ts
 .env
+src/**
+out/test/**
+**/*.ts
+*.vsix
+tsconfig.json

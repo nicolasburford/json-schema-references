@@ -80,15 +80,18 @@ export function resolveJsonPointerTarget(
     pointer &&
     !pointer.startsWith('/') &&
     pointerSegments.length === 1 &&
-    pointerSegments[0] !== '$defs'
+    pointerSegments[0] !== '$defs' &&
+    pointerSegments[0] !== 'definitions'
   ) {
-    const defsPointerSegments = ['$defs', pointerSegments[0]];
-    const defsTargetNode = findTargetNode(root, defsPointerSegments);
-    if (defsTargetNode) {
-      return {
-        targetNode: defsTargetNode,
-        pointerFragment: buildPointerFragment(defsPointerSegments)
-      };
+    for (const schemaDefinitionKey of ['$defs', 'definitions']) {
+      const defsPointerSegments = [schemaDefinitionKey, pointerSegments[0]];
+      const defsTargetNode = findTargetNode(root, defsPointerSegments);
+      if (defsTargetNode) {
+        return {
+          targetNode: defsTargetNode,
+          pointerFragment: buildPointerFragment(defsPointerSegments)
+        };
+      }
     }
   }
 
