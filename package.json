@@ -2,7 +2,7 @@
   "name": "json-schema-nav",
   "displayName": "JSON Schema References",
   "description": "Navigate local JSON Schema $ref references with hover previews and go to definition.",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "nicolasburford",
   "icon": "assets/icon.png",
   "engines": {
@@ -24,11 +24,14 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "test": "npm run compile && node --test out/test/*.test.js"
+    "test": "npm run compile && node --test out/test/*.test.js",
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/node": "^18.19.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.2",
     "typescript": "^5.3.3"
   },
   "dependencies": {

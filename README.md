@@ -25,3 +25,10 @@ Navigate between local JSON Schema `$ref` values with hover previews and go-to-d
 - Fragment shorthand without a slash resolves through `$defs`, then legacy `definitions`, e.g. `"#money"` and `"./product.json#money"` target `"/$defs/money"` or `"/definitions/money"` when no direct top-level match exists.
 - Pointer resolution follows the JSON Pointer specification, including `~0`/`~1` escape handling.
 - Hover previews truncate after a few hundred characters to keep tooltips compact.
+
+## Release Automation
+
+- Branch checks run tests and require `package.json` / `package-lock.json` to bump above `origin/main`.
+- To block merges, require the `Branch Checks / Test and validate version bump` check in the repository branch protection or ruleset for `main`.
+- Merges to `main` run tests and publish the extension through `vsce`.
+- Publishing requires a repository secret named `VSCE_PAT` with access to the VS Code Marketplace publisher.
